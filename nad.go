@@ -20,8 +20,8 @@ const (
 )
 
 // VerifyDNPass returns nil on successful LDAP bind
-func VerifyDNPass(dn, pass string, e domain) error {
-	conn, err := dialLDAPTLS(dn, pass, e)
+func VerifyDNPass(dn, pass string, domain domain) error {
+	conn, err := dialLDAPTLS(dn, pass, domain)
 	if err != nil {
 		return err
 	}
