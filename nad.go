@@ -12,9 +12,9 @@ import (
 
 // PROD, PREPROD, and TEST represents NAVs AD domains
 const (
-	Prod = "adeo.no"
-	Preprod = "preprod.local"
-	Test = "test.local"
+	PROD = "adeo.no"
+	PREPROD = "preprod.local"
+	TEST = "test.local"
 )
 
 // VerifyDNPass returns nil on successful LDAP bind
