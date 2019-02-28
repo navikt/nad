@@ -10,17 +10,15 @@ import (
 	"gopkg.in/ldap.v3"
 )
 
-type domain string
-
 // PROD, PREPROD, and TEST represents NAVs AD domains
 const (
-	PROD    domain = "adeo.no"
-	PREPROD domain = "preprod.local"
-	TEST    domain = "test.local"
+	Prod = "adeo.no"
+	Preprod = "preprod.local"
+	Test = "test.local"
 )
 
 // VerifyDNPass returns nil on successful LDAP bind
-func VerifyDNPass(dn, pass string, domain domain) error {
+func VerifyDNPass(dn, pass, domain string) error {
 	conn, err := dialLDAPTLS(dn, pass, domain)
 	if err != nil {
 		return err
@@ -32,7 +30,7 @@ func VerifyDNPass(dn, pass string, domain domain) error {
 
 // ModPass uses bindDN to set "unicodePwd" attribute of targetDN to targetNewPass
 // For use with admin or service accounts
-func ModPass(bindDN, bindPass, targetDN, targetNewPass string, domain domain) error {
+func ModPass(bindDN, bindPass, targetDN, targetNewPass, domain string) error {
 	utf16 := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM)
 	pwdEncoded, err := utf16.NewEncoder().String(fmt.Sprintf("\"%s\"", targetNewPass))
 	if err != nil {
@@ -67,14 +65,14 @@ func ModPass(bindDN, bindPass, targetDN, targetNewPass string, domain domain) er
 }
 
 // GetAttrs retrieves given attributes (such as "memberOf") for given sAMAccountName
-func GetAttrs(bindDN, bindPass, sAMAccountName string, domain domain, attributes ...string) (*ldap.SearchResult, error) {
+func GetAttrs(bindDN, bindPass, sAMAccountName, domain string, attributes ...string) (*ldap.SearchResult, error) {
 	conn, err := dialLDAPTLS(bindDN, bindPass, domain)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	baseDN := "DC=" + strings.Replace(string(domain), ".", ",DC=", 1)
+	baseDN := "DC=" + strings.Replace(domain, ".", ",DC=", 1)
 
 	sreq := ldap.NewSearchRequest(
 		baseDN,
@@ -98,15 +96,15 @@ func GetAttrs(bindDN, bindPass, sAMAccountName string, domain domain, attributes
 // "/etc/pki/tls/cacert.pem",
 // "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
 // Incidentally this is where nais mounts NAV CA truststores
-func dialLDAPTLS(bindDN, bindPass string, domain domain) (*ldap.Conn, error) {
+func dialLDAPTLS(bindDN, bindPass, domain string) (*ldap.Conn, error) {
 	rootCAs, _ := x509.SystemCertPool()
 	if rootCAs == nil {
 		x509.NewCertPool()
 	}
 
-	ldapgwURL := "ldapgw." + string(domain) + ":636"
+	ldapgwURL := "ldapgw." + domain + ":636"
 	tc := &tls.Config{
-		ServerName: "*." + string(domain),
+		ServerName: "*." + domain,
 		RootCAs:    rootCAs,
 	}
 	conn, err := ldap.DialTLS("tcp", ldapgwURL, tc)
