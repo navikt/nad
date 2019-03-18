@@ -4,22 +4,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"strings"
+	"regexp"
 
 	"golang.org/x/text/encoding/unicode"
 	"gopkg.in/ldap.v3"
 )
 
-// PROD, PREPROD, and TEST represents NAVs AD domains
-const (
-	PROD = "adeo.no"
-	PREPROD = "preprod.local"
-	TEST = "test.local"
-)
-
 // VerifyDNPass returns nil on successful LDAP bind
-func VerifyDNPass(dn, pass, domain string) error {
-	conn, err := dialLDAPTLS(dn, pass, domain)
+func VerifyDNPass(dn, pass string) error {
+	conn, err := dialLDAPTLS(dn, pass)
 	if err != nil {
 		return err
 	}
@@ -30,14 +23,14 @@ func VerifyDNPass(dn, pass, domain string) error {
 
 // ModPass uses bindDN to set "unicodePwd" attribute of targetDN to targetNewPass
 // For use with admin or service accounts
-func ModPass(bindDN, bindPass, targetDN, targetNewPass, domain string) error {
+func ModPass(bindDN, bindPass, targetDN, targetNewPass string) error {
 	utf16 := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM)
 	pwdEncoded, err := utf16.NewEncoder().String(fmt.Sprintf("\"%s\"", targetNewPass))
 	if err != nil {
 		return err
 	}
 
-	conn, err := dialLDAPTLS(bindDN, bindPass, domain)
+	conn, err := dialLDAPTLS(bindDN, bindPass)
 	if err != nil {
 		return err
 	}
@@ -65,14 +58,14 @@ func ModPass(bindDN, bindPass, targetDN, targetNewPass, domain string) error {
 }
 
 // GetAttrs retrieves given attributes (such as "memberOf") for given sAMAccountName
-func GetAttrs(bindDN, bindPass, sAMAccountName, domain string, attributes ...string) (*ldap.SearchResult, error) {
-	conn, err := dialLDAPTLS(bindDN, bindPass, domain)
+func GetAttrs(bindDN, bindPass, sAMAccountName string, attributes ...string) (*ldap.SearchResult, error) {
+	conn, err := dialLDAPTLS(bindDN, bindPass)
 	if err != nil {
 		return nil, err
-	}
-	defer conn.Close()
+	} 
 
-	baseDN := "DC=" + strings.Replace(domain, ".", ",DC=", 1)
+	re := regexp.MustCompile(`(?i)DC=[a-z]+,DC=[a-z]+$`)
+	baseDN := re.FindString(bindDN)
 
 	sreq := ldap.NewSearchRequest(
 		baseDN,
@@ -85,7 +78,8 @@ func GetAttrs(bindDN, bindPass, sAMAccountName, domain string, attributes ...str
 		attributes,
 		nil,
 	)
-
+	
+	conn.Close()
 	return conn.Search(sreq)
 }
 
@@ -96,7 +90,12 @@ func GetAttrs(bindDN, bindPass, sAMAccountName, domain string, attributes ...str
 // "/etc/pki/tls/cacert.pem",
 // "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
 // Incidentally this is where nais mounts NAV CA truststores
-func dialLDAPTLS(bindDN, bindPass, domain string) (*ldap.Conn, error) {
+func dialLDAPTLS(bindDN, bindPass string) (*ldap.Conn, error) {
+	domain, err := ParseDomain(bindDN)
+	if err != nil {
+		return nil, err
+	}
+
 	rootCAs, _ := x509.SystemCertPool()
 	if rootCAs == nil {
 		x509.NewCertPool()
@@ -117,4 +116,15 @@ func dialLDAPTLS(bindDN, bindPass, domain string) (*ldap.Conn, error) {
 	}
 
 	return conn, nil
+}
+
+// ParseDomain takes a DN and returns the domain in the form of "domain.local"
+func ParseDomain(dn string) (string, error) {
+	re := regexp.MustCompile(`(?i)DC=([a-z]+),DC=([a-z]+)$`)
+	xs := re.FindStringSubmatch(dn)
+	if len(xs) != 3 {
+		return "", fmt.Errorf("could not parse domain from %s", dn)
+	}
+
+	return fmt.Sprintf("%s.%s", xs[1], xs[2]), nil
 }
