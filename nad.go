@@ -25,16 +25,16 @@ func VerifyDNPass(dn, pass string) error {
 func VerifyCNPass(bindDN, bindPass, cn, pass string) error {
 	res, err := GetAttrs(bindDN, bindPass, cn, "dn")
 	if err != nil {
-			return fmt.Errorf("error finding user %s: %s", cn, err)
+		return fmt.Errorf("error finding user %s: %s", cn, err)
 	}
 	if len(res.Entries) != 1 {
-			return fmt.Errorf("multiple or no results for sAMAccountname")
+		return fmt.Errorf("multiple or no results for sAMAccountname")
 	}
-	
+
 	if err = VerifyDNPass(res.Entries[0].DN, pass); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -79,7 +79,8 @@ func GetAttrs(bindDN, bindPass, sAMAccountName string, attributes ...string) (*l
 	conn, err := dialLDAPTLS(bindDN, bindPass)
 	if err != nil {
 		return nil, err
-	} 
+	}
+	defer conn.Close()
 
 	re := regexp.MustCompile(`(?i)DC=[a-z]+,DC=[a-z]+$`)
 	baseDN := re.FindString(bindDN)
@@ -95,8 +96,7 @@ func GetAttrs(bindDN, bindPass, sAMAccountName string, attributes ...string) (*l
 		attributes,
 		nil,
 	)
-	
-	conn.Close()
+
 	return conn.Search(sreq)
 }
 
@@ -119,10 +119,12 @@ func dialLDAPTLS(bindDN, bindPass string) (*ldap.Conn, error) {
 	}
 
 	ldapgwURL := "ldapgw." + domain + ":636"
+
 	tc := &tls.Config{
 		ServerName: "*." + domain,
 		RootCAs:    rootCAs,
 	}
+
 	conn, err := ldap.DialTLS("tcp", ldapgwURL, tc)
 	if err != nil {
 		return nil, err
