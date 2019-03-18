@@ -21,6 +21,23 @@ func VerifyDNPass(dn, pass string) error {
 	return nil
 }
 
+// VerifyCNPass returns an error if the password is invalid
+func VerifyCNPass(bindDN, bindPass, cn, pass string) error {
+	res, err := GetAttrs(bindDN, bindPass, cn, "dn")
+	if err != nil {
+			return fmt.Errorf("error finding user %s: %s", cn, err)
+	}
+	if len(res.Entries) != 1 {
+			return fmt.Errorf("multiple or no results for sAMAccountname")
+	}
+	
+	if err = VerifyDNPass(res.Entries[0].DN, pass); err != nil {
+		return err
+	}
+	
+	return nil
+}
+
 // ModPass uses bindDN to set "unicodePwd" attribute of targetDN to targetNewPass
 // For use with admin or service accounts
 func ModPass(bindDN, bindPass, targetDN, targetNewPass string) error {
