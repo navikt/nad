@@ -100,6 +100,32 @@ func GetAttrs(bindDN, bindPass, sAMAccountName string, attributes ...string) (*l
 	return conn.Search(sreq)
 }
 
+// GetFilterAttrs does the same as GetAttrs but lets you give your own search filter
+func GetFilterAttrs(bindDN, bindPass, filter string, attributes ...string) (*ldap.SearchResult, error) {
+	conn, err := dialLDAPTLS(bindDN, bindPass)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	re := regexp.MustCompile(`(?i)DC=[a-z]+,DC=[a-z]+$`)
+	baseDN := re.FindString(bindDN)
+
+	sreq := ldap.NewSearchRequest(
+		baseDN,
+		ldap.ScopeWholeSubtree,
+		ldap.NeverDerefAliases,
+		0,
+		0,
+		false,
+		filter,
+		attributes,
+		nil,
+	)
+
+	return conn.Search(sreq)
+}
+
 // dialLDAPTLS needs a truststore. Looks in the following locations (on linux); stops when finding one:
 // "/etc/ssl/certs/ca-certificates.crt",
 // "/etc/pki/tls/certs/ca-bundle.crt",
