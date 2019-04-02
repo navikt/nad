@@ -173,3 +173,72 @@ func ParseDomain(dn string) (string, error) {
 
 	return fmt.Sprintf("%s.%s", xs[1], xs[2]), nil
 }
+
+// GetGroupMembers returns CN of users in given group
+func GetGroupMembers(bindDN, bindPass, groupname string) ([]string, error) {
+	baseDN := regexp.MustCompile(`(?i)DC=[a-z]+,DC=[a-z]+$`).FindString(bindDN)
+	groupDN, err := GetGroupDN(bindDN, bindPass, groupname)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := dialLDAPTLS(bindDN, bindPass)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	sr := newSearchRequest(baseDN,
+		fmt.Sprintf("(&(objectCategory=user)(memberOf=%s))", groupDN),
+		[]string{"CN"},
+	)
+	res, err := conn.Search(sr)
+	if err != nil {
+		return nil, err
+	}
+	members := []string{}
+	for _, v := range res.Entries {
+		members = append(members, v.Attributes[0].Values[0])
+	}
+	return members, nil
+}
+
+// GetGroupDN returns DN for given group CN
+func GetGroupDN(bindDN, bindPass, cn string) (string, error) {
+	conn, err := dialLDAPTLS(bindDN, bindPass)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	re := regexp.MustCompile(`(?i)DC=[a-z]+,DC=[a-z]+$`)
+	baseDN := re.FindString(bindDN)
+
+	sr := newSearchRequest(
+		baseDN,
+		fmt.Sprintf("(&(objectCategory=group)(cn=%s))", cn),
+		[]string{},
+	)
+
+	res, err := conn.Search(sr)
+	if err != nil {
+		return "", err
+	}
+	if len(res.Entries) != 1 {
+		return "", fmt.Errorf("multiple or no results for %s", cn)
+	}
+
+	return res.Entries[0].DN, err
+}
+
+func newSearchRequest(baseDN, filter string, attributes []string) *ldap.SearchRequest {
+	return ldap.NewSearchRequest(
+		baseDN,
+		ldap.ScopeWholeSubtree,
+		ldap.NeverDerefAliases,
+		0,
+		0,
+		false,
+		filter,
+		attributes,
+		nil,
+	)
+}
