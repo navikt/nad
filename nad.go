@@ -173,3 +173,38 @@ func ParseDomain(dn string) (string, error) {
 
 	return fmt.Sprintf("%s.%s", xs[1], xs[2]), nil
 }
+
+// GetGroupMembers returns the users in given group
+func GetGroupMembers(bindDN, bindPass, groupname string) ([]string, error) {
+	conn, err := dialLDAPTLS(bindDN, bindPass)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	re := regexp.MustCompile(`(?i)DC=[a-z]+,DC=[a-z]+$`)
+	baseDN := re.FindString(bindDN)
+
+	sreq := ldap.NewSearchRequest(
+		baseDN,
+		ldap.ScopeWholeSubtree,
+		ldap.NeverDerefAliases,
+		0,
+		0,
+		false,
+		fmt.Sprintf("(&(objectCategory=group)(cn=%s))", groupname),
+		[]string{"distinguishedName"},
+		nil,
+	)
+
+	res, err := conn.Search(sreq)
+	if err != nil {
+		return nil, err
+	}
+	
+	for k, v := range res.Entries[0].Attributes {
+		fmt.Println(k, v)
+	}
+	
+	return nil, nil
+}
