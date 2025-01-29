@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"golang.org/x/text/encoding/unicode"
 	"gopkg.in/ldap.v3"
 )
 
@@ -40,6 +41,12 @@ func VerifyCNPass(bindDN, bindPass, cn, pass string) error {
 // ModPass uses bindDN to set "unicodePwd" attribute of targetDN to targetNewPass
 // For use with admin or service accounts
 func ModPass(bindDN, bindPass, targetDN, targetNewPass string) error {
+	utf16 := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM)
+	pwdEncoded, err := utf16.NewEncoder().String(fmt.Sprintf("\"%s\"", targetNewPass))
+	if err != nil {
+		return err
+	}
+
 	conn, err := dialLDAPTLS(bindDN, bindPass)
 	if err != nil {
 		return err
@@ -53,13 +60,18 @@ func ModPass(bindDN, bindPass, targetDN, targetNewPass string) error {
 				Operation: 2,
 				Modification: ldap.PartialAttribute{
 					Type: "unicodePwd",
-					Vals: []string{"\"" + targetNewPass + "\""}, // add quotation marks
+					Vals: []string{pwdEncoded},
 				},
 			},
 		},
 	}
 
-	return conn.Modify(passReq)
+	err = conn.Modify(passReq)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // GetAttrs retrieves given attributes (such as "memberOf") for given sAMAccountName
